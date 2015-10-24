@@ -7,92 +7,133 @@ import java.security.GeneralSecurityException;
 
 /**
  * Provides AES algorithm
- *
- * @author Orhan Obut
  */
 final class AesEncryption implements Encryption {
 
-    private static final String KEY_SALT = "asdf3242klj";
-    private static final String PASSWORD = "asdf39230234242klj";
+  //never ever change this value since it will break backward compatibility in terms of keeping previous data
+  private static final String KEY_STORAGE_SALT = "asdf3242klj";
+  private static final String KEY_GENERATED_SECRET_KEYS = "adsfjlkj234234dasfgenasdfas";
 
-    private String saltKey;
-    private Storage storage;
+  private final String password;
+  private final Storage storage;
 
-    AesEncryption(Storage storage) {
-        this.storage = storage;
-        this.saltKey = storage.get(KEY_SALT);
+  private AesCbcWithIntegrity.SecretKeys key;
+  private String saltKey;
+
+  AesEncryption(Storage storage, String password) {
+    this.storage = storage;
+    this.password = password;
+  }
+
+  @Override public boolean init() {
+    this.saltKey = storage.get(KEY_STORAGE_SALT);
+
+    key = generateSecretKey(password);
+    return key != null;
+  }
+
+  @Override public String encrypt(byte[] value) {
+    if (value == null) {
+      return null;
+    }
+    String result = null;
+    try {
+      AesCbcWithIntegrity.CipherTextIvMac civ = AesCbcWithIntegrity.encrypt(value, key);
+      result = civ.toString();
+    } catch (GeneralSecurityException e) {
+      Logger.d(e.getMessage());
     }
 
-    @Override
-    public String encrypt(byte[] value) {
-        if (value == null) {
-            return null;
-        }
-        String result = null;
+    return result;
+  }
+
+  @Override public byte[] decrypt(String value) {
+    if (value == null) {
+      return null;
+    }
+    byte[] result = null;
+
+    try {
+      AesCbcWithIntegrity.CipherTextIvMac civ = getCipherTextIvMac(value);
+      result = AesCbcWithIntegrity.decrypt(civ, key);
+    } catch (GeneralSecurityException e) {
+      Logger.d(e.getMessage());
+    }
+
+    return result;
+  }
+
+  @Override public boolean reset() {
+    return storage.clear();
+  }
+
+  private AesCbcWithIntegrity.CipherTextIvMac getCipherTextIvMac(String cipherText) {
+    return new AesCbcWithIntegrity.CipherTextIvMac(cipherText);
+  }
+
+  /**
+   * Gets the secret key by using salt and password. Salt is stored in the storage
+   * If the salt is not stored, that means it is first time and it creates the salt and
+   * save it in the storage
+   * <p/>
+   * Some phones especially Samsung(I hate Samsung) do not support every algorithm. If it is not
+   * supported, it will fall generate the key without password and store it.
+   */
+  private AesCbcWithIntegrity.SecretKeys generateSecretKey(String password) {
+    AesCbcWithIntegrity.SecretKeys key;
+    if (password == null || storage.contains(KEY_GENERATED_SECRET_KEYS)) {
+      return getSecretKeysWithoutPassword();
+    }
+
+    key = generateSecretKeyFromPassword(password);
+    if (key == null) {
+      key = getSecretKeysWithoutPassword();
+    } else {
+      Logger.w("key is generated from password");
+    }
+    return key;
+  }
+
+  private AesCbcWithIntegrity.SecretKeys getSecretKeysWithoutPassword() {
+    Logger.w("key is generating without password");
+    try {
+      AesCbcWithIntegrity.SecretKeys key = null;
+      String keys = storage.get(KEY_GENERATED_SECRET_KEYS);
+      if (keys != null) {
         try {
-            AesCbcWithIntegrity.SecretKeys key = getSecretKey();
-            AesCbcWithIntegrity.CipherTextIvMac civ = AesCbcWithIntegrity.encrypt(value, key);
-            result = civ.toString();
-        } catch (GeneralSecurityException e) {
-            Logger.d(e.getMessage());
+          key = AesCbcWithIntegrity.keys(keys);
+        } catch (Exception e) {
+          key = null;
+          Logger.i("keys was not correct value, it is reset");
         }
-
-        return result;
+      }
+      if (key == null) {
+        key = AesCbcWithIntegrity.generateKey();
+        String parsed = key.toString();
+        storage.put(KEY_GENERATED_SECRET_KEYS, parsed);
+      }
+      Logger.w("key is generated without password");
+      return key;
+    } catch (GeneralSecurityException e) {
+      Logger.e(e.getMessage());
+      return null;
+    } catch (Exception e) {
+      Logger.e(e.getMessage());
+      return null;
     }
+  }
 
-    @Override
-    public byte[] decrypt(String value) {
-        if (value == null) {
-            return null;
-        }
-        byte[] result = null;
-
-        try {
-            AesCbcWithIntegrity.SecretKeys key = getSecretKey();
-            AesCbcWithIntegrity.CipherTextIvMac civ = getCipherTextIvMac(value);
-            result = AesCbcWithIntegrity.decrypt(civ, key);
-        } catch (GeneralSecurityException e) {
-            Logger.d(e.getMessage());
-        }
-
-        return result;
+  private AesCbcWithIntegrity.SecretKeys generateSecretKeyFromPassword(String password) {
+    try {
+      if (TextUtils.isEmpty(saltKey)) {
+        saltKey = AesCbcWithIntegrity.saltString(AesCbcWithIntegrity.generateSalt());
+        storage.put(KEY_STORAGE_SALT, saltKey);
+      }
+      return AesCbcWithIntegrity.generateKeyFromPassword(password, saltKey);
+    } catch (GeneralSecurityException e) {
+      Logger.e(e.getMessage());
+      return null;
     }
-
-    @Override
-    public void reset() {
-        storage.clear();
-    }
-
-    private AesCbcWithIntegrity.CipherTextIvMac getCipherTextIvMac(String cipherText) {
-        return new AesCbcWithIntegrity.CipherTextIvMac(cipherText);
-    }
-
-    /**
-     * Gets the secret key by using salt and password. Salt is stored in the storage
-     * If the salt is not stored, that means it is first time and it creates the salt and
-     * save it in the storage
-     *
-     * @return the secret key
-     */
-    private AesCbcWithIntegrity.SecretKeys getSecretKey() {
-        AesCbcWithIntegrity.SecretKeys key = null;
-        try {
-            if (!TextUtils.isEmpty(saltKey)) {
-                key = AesCbcWithIntegrity.generateKeyFromPassword(PASSWORD, saltKey);
-            }
-
-            // already generated
-            if (key != null) {
-                return key;
-            }
-            saltKey = AesCbcWithIntegrity.saltString(AesCbcWithIntegrity.generateSalt());
-            key = AesCbcWithIntegrity.generateKeyFromPassword(PASSWORD, saltKey);
-            storage.put(KEY_SALT, saltKey);
-        } catch (GeneralSecurityException e) {
-            Logger.d(e.getMessage());
-        }
-
-        return key;
-    }
+  }
 
 }

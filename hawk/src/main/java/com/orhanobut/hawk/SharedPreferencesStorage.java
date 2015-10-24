@@ -2,57 +2,61 @@ package com.orhanobut.hawk;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.util.Pair;
 
-/**
- * @author Orhan Obut
- */
+import java.util.List;
+
 final class SharedPreferencesStorage implements Storage {
 
-    private final Context context;
-    private final String tag;
+  private final SharedPreferences preferences;
 
-    SharedPreferencesStorage(Context context, String tag) {
-        this.context = context;
-        this.tag = tag;
-    }
+  SharedPreferencesStorage(Context context, String tag) {
+    preferences = context.getSharedPreferences(tag, Context.MODE_PRIVATE);
+  }
 
-    @Override
-    public <T> void put(String key, T value) {
-        getEditor().putString(key, String.valueOf(value)).commit();
-    }
+  @Override public <T> boolean put(String key, T value) {
+    return getEditor().putString(key, String.valueOf(value)).commit();
+  }
 
-    @SuppressWarnings("unchecked")
-    @Override
-    public <T> T get(String key) {
-        return (T) getSharedPreferences().getString(key, null);
+  @Override public boolean put(List<Pair<String, ?>> items) {
+    SharedPreferences.Editor editor = getEditor();
+    for (Pair<String, ?> item : items) {
+      editor.putString(item.first, String.valueOf(item.second));
     }
+    return editor.commit();
+  }
 
-    @Override
-    public void remove(String key) {
-        getEditor().remove(key).commit();
-    }
+  @SuppressWarnings("unchecked")
+  @Override public <T> T get(String key) {
+    return (T) preferences.getString(key, null);
+  }
 
-    @Override
-    public boolean contains(String key) {
-        return getSharedPreferences().contains(key);
-    }
+  @Override public boolean remove(String key) {
+    return getEditor().remove(key).commit();
+  }
 
-    @Override
-    public void clear() {
-        getEditor().clear().commit();
+  @Override public boolean remove(String... keys) {
+    SharedPreferences.Editor editor = getEditor();
+    for (String key : keys) {
+      editor.remove(key);
     }
+    return editor.commit();
+  }
 
-    @Override
-    public int count() {
-        return getSharedPreferences().getAll().size();
-    }
+  @Override public boolean contains(String key) {
+    return preferences.contains(key);
+  }
 
-    private SharedPreferences.Editor getEditor() {
-        SharedPreferences preferences = context.getSharedPreferences(tag, Context.MODE_PRIVATE);
-        return preferences.edit();
-    }
+  @Override public boolean clear() {
+    return getEditor().clear().commit();
+  }
 
-    private SharedPreferences getSharedPreferences() {
-        return context.getSharedPreferences(tag, Context.MODE_PRIVATE);
-    }
+  @Override public long count() {
+    return preferences.getAll().size();
+  }
+
+  private SharedPreferences.Editor getEditor() {
+    return preferences.edit();
+  }
+
 }
