@@ -2,9 +2,6 @@ package com.orhanobut.hawk;
 
 import android.content.Context;
 import android.content.SharedPreferences;
-import android.util.Pair;
-
-import java.util.List;
 
 final class SharedPreferencesStorage implements Storage {
 
@@ -14,16 +11,13 @@ final class SharedPreferencesStorage implements Storage {
     preferences = context.getSharedPreferences(tag, Context.MODE_PRIVATE);
   }
 
-  @Override public <T> boolean put(String key, T value) {
-    return getEditor().putString(key, String.valueOf(value)).commit();
+  SharedPreferencesStorage(SharedPreferences preferences) {
+    this.preferences = preferences;
   }
 
-  @Override public boolean put(List<Pair<String, ?>> items) {
-    SharedPreferences.Editor editor = getEditor();
-    for (Pair<String, ?> item : items) {
-      editor.putString(item.first, String.valueOf(item.second));
-    }
-    return editor.commit();
+  @Override public <T> boolean put(String key, T value) {
+    HawkUtils.checkNull("key", key);
+    return getEditor().putString(key, String.valueOf(value)).commit();
   }
 
   @SuppressWarnings("unchecked")
@@ -31,23 +25,15 @@ final class SharedPreferencesStorage implements Storage {
     return (T) preferences.getString(key, null);
   }
 
-  @Override public boolean remove(String key) {
+  @Override public boolean delete(String key) {
     return getEditor().remove(key).commit();
-  }
-
-  @Override public boolean remove(String... keys) {
-    SharedPreferences.Editor editor = getEditor();
-    for (String key : keys) {
-      editor.remove(key);
-    }
-    return editor.commit();
   }
 
   @Override public boolean contains(String key) {
     return preferences.contains(key);
   }
 
-  @Override public boolean clear() {
+  @Override public boolean deleteAll() {
     return getEditor().clear().commit();
   }
 

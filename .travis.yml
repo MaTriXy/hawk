@@ -2,15 +2,23 @@ language: android
 
 android:
   components:
-    - build-tools-21.1.1
-    - android-18
-  licenses:
-    - 'android-sdk-license-.+'
+    - tools
+    - platform-tools
+    - build-tools-24.0.2
+    - android-24
+    - extra-android-m2repository
+    - sys-img-armeabi-v7a-android-18
+
+jdk:
+  - oraclejdk8
 
 notifications:
-  email: true
-
-sudo: false
+  email: false
 
 script:
-- ./gradlew test
+- ./gradlew check
+
+cache:
+  directories:
+    - $HOME/.m2
+    - $HOME/.gradle
